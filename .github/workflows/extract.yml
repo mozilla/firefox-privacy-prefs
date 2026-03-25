@@ -10,6 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git and sync
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --ff-only origin main
 
       - name: Download GeckoView test APKs
         run: |
@@ -23,6 +32,16 @@ jobs:
           cat > run_extraction.sh << 'SCRIPT'
           #!/bin/bash
           set -e
+          adb kill-server
+          adb start-server
+          adb wait-for-device
+          for i in $(seq 1 60); do
+            if adb shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
+              break
+            fi
+            sleep 2
+          done
+          adb shell input keyevent 82 || true
           adb install geckoview_example.apk
           adb install geckoview-androidTest.apk
           COMPONENT="org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner"
@@ -37,16 +56,12 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
+          disable-animations: true
+          emulator-options: -no-snapshot -noaudio -no-boot-anim
           script: ./run_extraction.sh
 
       - name: Commit updated prefs
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp android.json /tmp/android.json
-          git stash
-          git pull --rebase origin main
-          cp /tmp/android.json android.json
           git add android.json
           git diff --staged --quiet || git commit -m "Update Android privacy pref snapshot"
-          git push
+          git push origin HEAD:main
