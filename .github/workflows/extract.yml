@@ -1,4 +1,4 @@
-name: Extract ETP Prefs
+name: Extract Privacy Prefs
 
 on:
   schedule:
@@ -6,34 +6,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  desktop:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libdbus-glib-1-2 libgtk-3-0 libx11-xcb1 libxt6
-          pip install marionette-driver
-
-      - name: Download latest nightly
-        run: |
-          curl -sL "https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US" -o firefox.tar.xz
-          tar xf firefox.tar.xz
-
-      - name: Extract ETP prefs
-        run: |
-          python scripts/extract_desktop.py \
-            --binary firefox/firefox \
-            --output desktop.json
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-prefs
-          path: desktop.json
-
   android:
     runs-on: ubuntu-latest
     steps:
@@ -57,32 +29,10 @@ jobs:
             adb shell am instrument -w -e class org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee test_output.log
             grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-prefs
-          path: android.json
-
-  commit:
-    needs: [desktop, android]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download desktop artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: desktop-prefs
-
-      - name: Download android artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: android-prefs
-
       - name: Commit updated prefs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add desktop.json android.json
-          git diff --staged --quiet || git commit -m "Update privacy pref snapshots"
+          git add android.json
+          git diff --staged --quiet || git commit -m "Update Android privacy pref snapshot"
           git push
