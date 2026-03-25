@@ -35,36 +35,48 @@ jobs:
           INDEX="gecko.v2.mozilla-central.latest.mobile.android-x86_64-opt"
           curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview_example.apk" -o geckoview_example.apk
           curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview-androidTest.apk" -o geckoview-androidTest.apk
+          file geckoview_example.apk geckoview-androidTest.apk
 
-      - name: Create extraction script
+      - name: Write extraction script
         run: |
-          cat > run_extraction.sh << 'SCRIPT'
+          cat > run_extraction.sh << 'EOF'
           #!/bin/bash
           set -e
           adb wait-for-device
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             if adb shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; then
+              echo "Emulator booted after ${i} checks"
               break
             fi
             sleep 2
           done
           adb shell input keyevent 82 || true
+          echo "Installing APKs..."
           adb install geckoview_example.apk
           adb install geckoview-androidTest.apk
+          echo "Running extraction test..."
           COMPONENT="org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner"
           CLASS="org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs"
           adb shell am instrument -w -e class "$CLASS" "$COMPONENT" 2>&1 | tee test_output.log
-          grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
-          SCRIPT
+          echo "Parsing output..."
+          if grep -q "ETP_PREF_DUMP" test_output.log; then
+            grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
+            echo "Success: $(wc -c < android.json) bytes written to android.json"
+          else
+            echo "ERROR: ETP_PREF_DUMP not found in test output"
+            cat test_output.log
+            exit 1
+          fi
+          EOF
           chmod +x run_extraction.sh
 
       - name: Run extraction test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 34
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-snapshot -noaudio -no-boot-anim -no-window
+          emulator-options: -no-snapshot -no-boot-anim -no-window
           script: ./run_extraction.sh
 
       - name: Commit updated prefs
