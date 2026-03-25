@@ -73,10 +73,11 @@ jobs:
       - name: Run extraction test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 29
           arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          emulator-options: -no-snapshot -no-boot-anim -no-window
           script: ./run_extraction.sh
 
       - name: Commit updated prefs
