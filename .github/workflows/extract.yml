@@ -54,11 +54,7 @@ jobs:
           script: |
             adb install geckoview_example.apk
             adb install geckoview-androidTest.apk
-            adb shell am instrument -w \
-              -e class org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs \
-              org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner \
-              2>&1 | tee test_output.log
-            # Extract JSON from log output
+            adb shell am instrument -w -e class org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee test_output.log
             grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
 
       - name: Upload artifact
