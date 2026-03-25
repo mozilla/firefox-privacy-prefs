@@ -1,0 +1,90 @@
+name: Extract ETP Prefs
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-glib-1-2 libgtk-3-0 libx11-xcb1 libxt6
+          pip install marionette-driver
+
+      - name: Download latest nightly
+        run: |
+          curl -sL "https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US" -o firefox.tar.xz
+          tar xf firefox.tar.xz
+
+      - name: Extract ETP prefs
+        run: |
+          python scripts/extract_desktop.py \
+            --binary firefox/firefox \
+            --output desktop.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-prefs
+          path: desktop.json
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download GeckoView test APKs
+        run: |
+          BASE_URL="https://firefox-ci-tc.services.mozilla.com/api/index/v1/task"
+          INDEX="gecko.v2.mozilla-central.latest.mobile.android-x86_64-opt"
+          curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview_example.apk" -o geckoview_example.apk
+          curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview-androidTest.apk" -o geckoview-androidTest.apk
+
+      - name: Run extraction test on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install geckoview_example.apk
+            adb install geckoview-androidTest.apk
+            adb shell am instrument -w \
+              -e class org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs \
+              org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner \
+              2>&1 | tee test_output.log
+            # Extract JSON from log output
+            grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-prefs
+          path: android.json
+
+  commit:
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download desktop artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-prefs
+
+      - name: Download android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-prefs
+
+      - name: Commit updated prefs
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update ETP pref snapshots"
+          file_pattern: "desktop.json android.json"

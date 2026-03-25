@@ -1,0 +1,7 @@
+{
+  "platform": "android",
+  "modes": {
+    "standard": {},
+    "strict": {}
+  }
+}

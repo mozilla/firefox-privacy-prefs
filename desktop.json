@@ -1,0 +1,7 @@
+{
+  "platform": "desktop",
+  "modes": {
+    "standard": {},
+    "strict": {}
+  }
+}
