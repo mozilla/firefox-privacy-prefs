@@ -43,7 +43,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp android.json /tmp/android.json
+          git stash
+          git pull --rebase origin main
+          cp /tmp/android.json android.json
           git add android.json
           git diff --staged --quiet || git commit -m "Update Android privacy pref snapshot"
-          git pull --rebase origin main
           git push
