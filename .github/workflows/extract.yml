@@ -18,16 +18,26 @@ jobs:
           curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview_example.apk" -o geckoview_example.apk
           curl -sL "$BASE_URL/$INDEX/artifacts/public/build/geckoview-androidTest.apk" -o geckoview-androidTest.apk
 
+      - name: Create extraction script
+        run: |
+          cat > run_extraction.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+          adb install geckoview_example.apk
+          adb install geckoview-androidTest.apk
+          COMPONENT="org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner"
+          CLASS="org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs"
+          adb shell am instrument -w -e class "$CLASS" "$COMPONENT" 2>&1 | tee test_output.log
+          grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
+          SCRIPT
+          chmod +x run_extraction.sh
+
       - name: Run extraction test on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
-          script: |
-            adb install geckoview_example.apk
-            adb install geckoview-androidTest.apk
-            adb shell am instrument -w -e class org.mozilla.geckoview.test.EtpPrefExtractionTest#extractEtpPrefs org.mozilla.geckoview.test.runner/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee test_output.log
-            grep "ETP_PREF_DUMP" test_output.log | sed 's/.*ETP_PREF_DUMP: //' > android.json
+          script: ./run_extraction.sh
 
       - name: Commit updated prefs
         run: |
